@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1200" height="1600" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3498db;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2c3e50;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="1200" height="1600" fill="url(#bg)"/>
+  
+  <!-- White content area -->
+  <rect x="100" y="100" width="1000" height="1400" fill="white" rx="20"/>
+  
+  <!-- Title -->
+  <text x="600" y="400" font-family="Arial, sans-serif" font-size="72" font-weight="bold" text-anchor="middle" fill="#2c3e50">
+    Open Code Agents
+  </text>
+  
+  <!-- Subtitle -->
+  <text x="600" y="500" font-family="Arial, sans-serif" font-size="36" text-anchor="middle" fill="#34495e">
+    Complete Guide to AI-Powered
+  </text>
+  <text x="600" y="550" font-family="Arial, sans-serif" font-size="36" text-anchor="middle" fill="#34495e">
+    Development Workflows
+  </text>
+  
+  <!-- Version -->
+  <text x="600" y="700" font-family="Arial, sans-serif" font-size="24" text-anchor="middle" fill="#7f8c8d">
+    Version test-20251031
+  </text>
+  
+  <!-- Decorative elements -->
+  <circle cx="600" cy="900" r="80" fill="#3498db" opacity="0.2"/>
+  <circle cx="500" cy="950" r="60" fill="#e74c3c" opacity="0.2"/>
+  <circle cx="700" cy="950" r="60" fill="#2ecc71" opacity="0.2"/>
+  
+  <!-- Bottom text -->
+  <text x="600" y="1300" font-family="Arial, sans-serif" font-size="28" text-anchor="middle" fill="#34495e">
+    Open Source AI Development Tools
+  </text>
+  
+  <!-- Date -->
+  <text x="600" y="1400" font-family="Arial, sans-serif" font-size="20" text-anchor="middle" fill="#95a5a6">
+    2025
+  </text>
+</svg>

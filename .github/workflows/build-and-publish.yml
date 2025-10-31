@@ -1,0 +1,239 @@
+name: Build and Publish EPUB
+
+on:
+  push:
+    branches: [ main, master ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version override (optional)'
+        required: false
+        type: string
+
+jobs:
+  build-epub:
+    name: Build EPUB Documentation
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Get full history for version info
+    
+    - name: Setup Pandoc
+      uses: pandoc/actions/setup@v1
+      with:
+        version: '3.5'  # Use specific version for consistency
+        
+    - name: Cache Pandoc packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.cabal/packages
+        key: ${{ runner.os }}-pandoc-${{ hashFiles('**/cabal.project') }}
+        restore-keys: |
+          ${{ runner.os }}-pandoc-
+    
+    - name: Install additional dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          texlive-latex-base \
+          texlive-fonts-recommended \
+          texlive-latex-extra \
+          texlive-xetex \
+          librsvg2-bin \
+          libcairo2-dev \
+          libpango1.0-dev \
+          libgdk-pixbuf2.0-dev \
+          libffi-dev \
+          libxml2-dev
+    
+    - name: Determine version
+      id: version
+      run: |
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ github.event.inputs.version }}" ]]; then
+          VERSION="${{ github.event.inputs.version }}"
+        elif [[ "${{ github.ref_type }}" == "tag" ]]; then
+          VERSION="${{ github.ref_name }}"
+        else
+          VERSION="$(date +%Y%m%d)-$(git rev-parse --short HEAD)"
+        fi
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+        echo "Building version: $VERSION"
+    
+    - name: Make scripts executable
+      run: chmod +x scripts/*.sh
+    
+    - name: Generate EPUB content
+      run: |
+        ./scripts/generate-epub-content.sh "${{ steps.version.outputs.VERSION }}"
+    
+    - name: Build EPUB
+      run: |
+        ./scripts/build-epub.sh "${{ steps.version.outputs.VERSION }}"
+    
+    - name: Verify EPUB
+      run: |
+        # Check if EPUB was created
+        if [ ! -f "open-code-agents-${{ steps.version.outputs.VERSION }}.epub" ]; then
+          echo "❌ EPUB file not found"
+          exit 1
+        fi
+        
+        # Check EPUB file size
+        EPUB_SIZE=$(stat -c%s "open-code-agents-${{ steps.version.outputs.VERSION }}.epub")
+        echo "📊 EPUB size: $EPUB_SIZE bytes"
+        
+        # Validate EPUB structure (basic check)
+        if command -v zipinfo &> /dev/null; then
+          echo "📋 EPUB contents:"
+          zipinfo -1 "open-code-agents-${{ steps.version.outputs.VERSION }}.epub" | head -20
+        fi
+    
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: epub-artifacts
+        path: |
+          *.epub
+          *.pdf
+        retention-days: 30
+        if-no-files-found: warn
+    
+    - name: Generate release notes
+      if: startsWith(github.ref, 'refs/tags/')
+      id: release-notes
+      run: |
+        # Generate changelog from git commits since last tag
+        LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+        
+        if [ -n "$LAST_TAG" ]; then
+          echo "## Changes since $LAST_TAG" > release_notes.md
+          echo "" >> release_notes.md
+          git log --pretty=format:"- %s (%h)" $LAST_TAG..HEAD >> release_notes.md
+        else
+          echo "## Initial Release" > release_notes.md
+          echo "" >> release_notes.md
+          echo "First release of Open Code Agents documentation." >> release_notes.md
+        fi
+        
+        echo "📚 EPUB documentation for Open Code Agents" >> release_notes.md
+        echo "" >> release_notes.md
+        echo "### Features:" >> release_notes.md
+        echo "- Complete guide to AI-powered development workflows" >> release_notes.md
+        echo "- Detailed agent documentation" >> release_notes.md
+        echo "- Installation and setup instructions" >> release_notes.md
+        echo "- Best practices and troubleshooting" >> release_notes.md
+        
+        # Add file info
+        echo "" >> release_notes.md
+        echo "### Files:" >> release_notes.md
+        echo "- \`open-code-agents-${{ steps.version.outputs.VERSION }}.epub\` - EPUB format for e-readers" >> release_notes.md
+        
+        if [ -f "open-code-agents-${{ steps.version.outputs.VERSION }}.pdf" ]; then
+          echo "- \`open-code-agents-${{ steps.version.outputs.VERSION }}.pdf\` - PDF format for reading" >> release_notes.md
+        fi
+        
+        cat release_notes.md
+        echo "RELEASE_NOTES<<EOF" >> $GITHUB_OUTPUT
+        cat release_notes.md >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+    
+    - name: Create Release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          open-code-agents-${{ steps.version.outputs.VERSION }}.epub
+          open-code-agents-latest.epub
+          open-code-agents-${{ steps.version.outputs.VERSION }}.pdf
+        name: Open Code Agents Documentation ${{ steps.version.outputs.VERSION }}
+        body: ${{ steps.release-notes.outputs.RELEASE_NOTES }}
+        draft: false
+        prerelease: contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc')
+        generate_release_notes: true
+        make_latest: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Update GitHub Pages
+      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+      uses: peaceiris/actions-gh-pages@v4
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./
+        publish_branch: gh-pages
+        keep_files: |
+          open-code-agents-latest.epub
+          *.pdf
+        allow_empty_commit: false
+        force_orphan: true
+
+  # Job to build on other platforms for consistency
+  build-cross-platform:
+    name: Cross-platform Build
+    runs-on: ${{ matrix.os }}
+    needs: build-epub
+    if: startsWith(github.ref, 'refs/tags/')
+    
+    strategy:
+      matrix:
+        os: [macos-latest, windows-latest]
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Setup Pandoc (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        brew install pandoc librsvg
+    
+    - name: Setup Pandoc (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        choco install pandoc
+    
+    - name: Determine version
+      id: version
+      run: |
+        if [[ "${{ github.ref_type }}" == "tag" ]]; then
+          VERSION="${{ github.ref_name }}"
+        else
+          VERSION="$(date +%Y%m%d)-dev"
+        fi
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+    
+    - name: Make scripts executable
+      if: runner.os != 'Windows'
+      run: chmod +x scripts/*.sh
+    
+    - name: Generate EPUB content
+      run: |
+        if [ "${{ runner.os }}" = "Windows" ]; then
+          bash scripts/generate-epub-content.sh "${{ steps.version.outputs.VERSION }}"
+        else
+          ./scripts/generate-epub-content.sh "${{ steps.version.outputs.VERSION }}"
+        fi
+    
+    - name: Build EPUB
+      run: |
+        if [ "${{ runner.os }}" = "Windows" ]; then
+          bash scripts/build-epub.sh "${{ steps.version.outputs.VERSION }}"
+        else
+          ./scripts/build-epub.sh "${{ steps.version.outputs.VERSION }}"
+        fi
+    
+    - name: Upload cross-platform artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: epub-${{ runner.os }}
+        path: |
+          *.epub
+          *.pdf
+        retention-days: 7

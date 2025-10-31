@@ -71,7 +71,7 @@ EOF
 # Convert SVG to PNG using available tools
 if command -v rsvg-convert &> /dev/null; then
     echo "Converting SVG to PNG with rsvg-convert..."
-    rsvg-convert -w 1200 -h 1600 "$COVER_SVG" "$COVER_PNG"
+    rsvg-convert -w 1200 -h 1600 -o "$COVER_PNG" "$COVER_SVG"
 elif command -v convert &> /dev/null; then
     echo "Converting SVG to PNG with ImageMagick..."
     convert -background none -size 1200x1600 "$COVER_SVG" "$COVER_PNG"
